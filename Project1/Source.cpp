@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <gdiplus.h>
 #include <tchar.h>
+#include <string>
 
 using namespace Gdiplus;
 
@@ -31,47 +32,41 @@ void CreateAppMenu(HWND hWnd)
     SetMenu(hWnd, hMenu);
 }
 
-void ShowSaveFileDialog(HWND hWnd)
+void ShowSaveFileDialog(HWND hWnd, const std::wstring& dataToWrite)
 {
-    OPENFILENAME ofn;       // Структура для диалога сохранения
-    TCHAR szFile[MAX_PATH] = _T("simple.inf"); // Имя файла по умолчанию
+    OPENFILENAME ofn;       
+    TCHAR szFile[MAX_PATH] = _T("simple.inf"); 
 
     ZeroMemory(&ofn, sizeof(ofn));
     ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = hWnd; // Родительское окно
-    ofn.lpstrFile = szFile; // Буфер для имени файла
+    ofn.hwndOwner = hWnd;
+    ofn.lpstrFile = szFile; 
     ofn.nMaxFile = sizeof(szFile) / sizeof(TCHAR);
     ofn.lpstrFilter = _T("INF Files\0*.inf\0All Files\0*.*\0");
-    ofn.nFilterIndex = 1; // Индекс фильтра по умолчанию
-    ofn.lpstrDefExt = _T("inf"); // Расширение по умолчанию
+    ofn.nFilterIndex = 1;
+    ofn.lpstrDefExt = _T("inf");
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
 
-    // Открыть диалог сохранения
     if (GetSaveFileName(&ofn))
     {
-        // Создаем файл и записываем в него данные
         HANDLE hFile = CreateFile(
-            ofn.lpstrFile,                // Путь к файлу
-            GENERIC_WRITE,                // Режим записи
-            0,                            // Общий доступ
-            NULL,                         // Атрибуты безопасности
-            CREATE_ALWAYS,                // Перезаписывать, если файл существует
-            FILE_ATTRIBUTE_NORMAL,        // Атрибуты файла
-            NULL                          // Шаблон файла
+            ofn.lpstrFile,                
+            GENERIC_WRITE,                
+            0,                            
+            NULL,                         
+            CREATE_ALWAYS,                
+            FILE_ATTRIBUTE_NORMAL,        
+            NULL                          
         );
 
         if (hFile != INVALID_HANDLE_VALUE)
         {
-            // Записываем данные в файл
-            const char* data = "This is a test file.\n";
             DWORD bytesWritten;
-            WriteFile(hFile, data, strlen(data), &bytesWritten, NULL);
+            WriteFile(hFile, dataToWrite.c_str(), dataToWrite.size() * sizeof(wchar_t), &bytesWritten, NULL);
 
-            // Закрываем файл
             CloseHandle(hFile);
 
             MessageBox(hWnd, _T("File saved successfully!"), _T("Success"), MB_OK);
-
             DestroyWindow(hWnd);
         }
         else
@@ -87,7 +82,7 @@ void ShowSaveFileDialog(HWND hWnd)
 
 LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    static HWND hEdit; // Хендл текстового поля
+    static HWND hEdit;
     static Image* background = nullptr;
 
     switch (message)
@@ -96,15 +91,14 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     {
         background = new Image(L"C:\\Users\\ddazk\\Downloads\\backimage.png");
 
-        // Создаем текстовое поле
         hEdit = CreateWindowEx(
             WS_EX_CLIENTEDGE,
             _T("EDIT"),
-            _T(""), // Начальное содержимое
+            _T(""),
             WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
-            10, 10, 460, 400, // Позиция и размеры
+            10, 10, 460, 400, 
             hWnd,
-            (HMENU)101, // Идентификатор текстового поля
+            (HMENU)101,
             hInst,
             NULL);
 
@@ -119,51 +113,20 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
         case ID_SAVE_FILE:
         {
-            // Получаем текст из текстового поля
             int textLength = GetWindowTextLength(hEdit);
             if (textLength > 0)
             {
                 TCHAR* buffer = new TCHAR[textLength + 1];
                 GetWindowText(hEdit, buffer, textLength + 1);
 
-                // Открываем диалог сохранения файла
-                OPENFILENAME ofn;
-                TCHAR szFile[MAX_PATH] = _T("simple.inf");
-
-                ZeroMemory(&ofn, sizeof(ofn));
-                ofn.lStructSize = sizeof(ofn);
-                ofn.hwndOwner = hWnd;
-                ofn.lpstrFile = szFile;
-                ofn.nMaxFile = sizeof(szFile) / sizeof(TCHAR);
-                ofn.lpstrFilter = _T("INF Files\0*.inf\0All Files\0*.*\0");
-                ofn.nFilterIndex = 1;
-                ofn.lpstrDefExt = _T("inf");
-                ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
-
-                if (GetSaveFileName(&ofn))
-                {
-                    HANDLE hFile = CreateFile(
-                        ofn.lpstrFile,
-                        GENERIC_WRITE,
-                        0,
-                        NULL,
-                        CREATE_ALWAYS,
-                        FILE_ATTRIBUTE_NORMAL,
-                        NULL);
-
-                    if (hFile != INVALID_HANDLE_VALUE)
-                    {
-                        DWORD bytesWritten;
-                        WriteFile(hFile, buffer, textLength * sizeof(TCHAR), &bytesWritten, NULL);
-                        CloseHandle(hFile);
-                        MessageBox(hWnd, _T("File saved successfully!"), _T("Success"), MB_OK);
-                    }
-                    else
-                    {
-                        MessageBox(hWnd, _T("Failed to save the file."), _T("Error"), MB_OK);
-                    }
-                }
+#ifdef UNICODE
+                std::wstring str(buffer);
+#else
+                std::string str(buffer);
+#endif
                 delete[] buffer;
+
+                ShowSaveFileDialog(hWnd, str);
 
                 if (background)
                 {
@@ -174,7 +137,7 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             }
             else
             {
-                MessageBox(hWnd, _T("Text box is empty!"), _T("Warning"), MB_OK);
+                MessageBox(hWnd, _T("Text box is empty."), _T("Info"), MB_OK);
             }
             break;
         }

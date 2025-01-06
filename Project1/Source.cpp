@@ -71,6 +71,8 @@ void ShowSaveFileDialog(HWND hWnd)
             CloseHandle(hFile);
 
             MessageBox(hWnd, _T("File saved successfully!"), _T("Success"), MB_OK);
+
+            DestroyWindow(hWnd);
         }
         else
         {
@@ -79,14 +81,13 @@ void ShowSaveFileDialog(HWND hWnd)
     }
     else
     {
-        // Если пользователь отменил выбор
         MessageBox(hWnd, _T("Save cancelled."), _T("Info"), MB_OK);
     }
 }
 
-
 LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+    static HWND hEdit; // Хендл текстового поля
     static Image* background = nullptr;
 
     switch (message)
@@ -94,8 +95,93 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     case WM_CREATE:
     {
         background = new Image(L"C:\\Users\\ddazk\\Downloads\\backimage.png");
+
+        // Создаем текстовое поле
+        hEdit = CreateWindowEx(
+            WS_EX_CLIENTEDGE,
+            _T("EDIT"),
+            _T(""), // Начальное содержимое
+            WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
+            10, 10, 460, 400, // Позиция и размеры
+            hWnd,
+            (HMENU)101, // Идентификатор текстового поля
+            hInst,
+            NULL);
+
+        if (!hEdit)
+        {
+            MessageBox(hWnd, _T("Failed to create edit box."), _T("Error"), MB_OK);
+        }
         break;
     }
+    case WM_COMMAND:
+        switch (LOWORD(wParam))
+        {
+        case ID_SAVE_FILE:
+        {
+            // Получаем текст из текстового поля
+            int textLength = GetWindowTextLength(hEdit);
+            if (textLength > 0)
+            {
+                TCHAR* buffer = new TCHAR[textLength + 1];
+                GetWindowText(hEdit, buffer, textLength + 1);
+
+                // Открываем диалог сохранения файла
+                OPENFILENAME ofn;
+                TCHAR szFile[MAX_PATH] = _T("simple.inf");
+
+                ZeroMemory(&ofn, sizeof(ofn));
+                ofn.lStructSize = sizeof(ofn);
+                ofn.hwndOwner = hWnd;
+                ofn.lpstrFile = szFile;
+                ofn.nMaxFile = sizeof(szFile) / sizeof(TCHAR);
+                ofn.lpstrFilter = _T("INF Files\0*.inf\0All Files\0*.*\0");
+                ofn.nFilterIndex = 1;
+                ofn.lpstrDefExt = _T("inf");
+                ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+                if (GetSaveFileName(&ofn))
+                {
+                    HANDLE hFile = CreateFile(
+                        ofn.lpstrFile,
+                        GENERIC_WRITE,
+                        0,
+                        NULL,
+                        CREATE_ALWAYS,
+                        FILE_ATTRIBUTE_NORMAL,
+                        NULL);
+
+                    if (hFile != INVALID_HANDLE_VALUE)
+                    {
+                        DWORD bytesWritten;
+                        WriteFile(hFile, buffer, textLength * sizeof(TCHAR), &bytesWritten, NULL);
+                        CloseHandle(hFile);
+                        MessageBox(hWnd, _T("File saved successfully!"), _T("Success"), MB_OK);
+                    }
+                    else
+                    {
+                        MessageBox(hWnd, _T("Failed to save the file."), _T("Error"), MB_OK);
+                    }
+                }
+                delete[] buffer;
+
+                if (background)
+                {
+                    delete background;
+                    background = nullptr;
+                }
+                DestroyWindow(hWnd);
+            }
+            else
+            {
+                MessageBox(hWnd, _T("Text box is empty!"), _T("Warning"), MB_OK);
+            }
+            break;
+        }
+        default:
+            return DefWindowProc(hWnd, message, wParam, lParam);
+        }
+        break;
     case WM_PAINT:
     {
         PAINTSTRUCT ps;
@@ -110,20 +196,11 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         EndPaint(hWnd, &ps);
         break;
     }
-    case WM_COMMAND:
-        switch (LOWORD(wParam))
-        {
-        case ID_SAVE_FILE:
-            ShowSaveFileDialog(hWnd);
-            break;
-        default:
-            return DefWindowProc(hWnd, message, wParam, lParam);
-        }
-        break;
     case WM_CLOSE:
     case WM_DESTROY:
     {
-        if (background) {
+        if (background)
+        {
             delete background;
             background = nullptr;
         }
@@ -136,7 +213,6 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
     return 0;
 }
-
 
 void CreateFileProcessingForm(HWND hWnd) {
     static bool classRegistered = false;
@@ -383,7 +459,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
-
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
     }

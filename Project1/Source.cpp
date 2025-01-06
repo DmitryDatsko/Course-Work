@@ -417,12 +417,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if (GetOpenFileName(&ofn))
             {
                 MessageBox(hWnd, ofn.lpstrFile, _T("Selected File"), MB_OK);
+                CreateFileProcessingForm(hWnd);
             }
             else
             {
                 MessageBox(hWnd, _T("No file selected."), _T("Open File"), MB_OK);
             }
-
+            
             break;
         }
         case ID_ABOUT:
@@ -446,13 +447,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if (ext && _tcsicmp(ext, _T(".inf")) == 0)
             {
                 MessageBox(hWnd, filePath, _T("Valid INF File"), MB_OK);
+                CreateFileProcessingForm(hWnd);
             }
             else
             {
                 MessageBox(hWnd, _T("Invalid file type. Only .inf files are allowed."), _T("Error"), MB_OK);
             }
         }
-
+        
         DragFinish(hDrop);
         break;
     }

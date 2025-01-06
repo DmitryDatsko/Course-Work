@@ -9,9 +9,11 @@
 #include <string>
 
 using namespace Gdiplus;
+using namespace std;
 
 #pragma comment (lib, "Gdiplus.lib")
 
+wstring fileContent;
 HINSTANCE hInst;
 ULONG_PTR gdiplusToken;
 Image* backgroundImage = nullptr;
@@ -91,10 +93,12 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     {
         background = new Image(L"C:\\Users\\ddazk\\Downloads\\backimage.png");
 
+        MessageBox(hWnd, fileContent.c_str(), _T("Error"), MB_OK);
+
         hEdit = CreateWindowEx(
             WS_EX_CLIENTEDGE,
             _T("EDIT"),
-            _T(""),
+            fileContent.c_str(),
             WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
             10, 10, 460, 400, 
             hWnd,
@@ -127,6 +131,7 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                 delete[] buffer;
 
                 ShowSaveFileDialog(hWnd, str);
+                fileContent = str;
 
                 if (background)
                 {

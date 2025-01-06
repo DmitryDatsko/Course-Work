@@ -31,16 +31,66 @@ void CreateAppMenu(HWND hWnd)
     SetMenu(hWnd, hMenu);
 }
 
+void ShowSaveFileDialog(HWND hWnd)
+{
+    OPENFILENAME ofn;       // Структура для диалога сохранения
+    TCHAR szFile[MAX_PATH] = _T("simple.inf"); // Имя файла по умолчанию
+
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hWnd; // Родительское окно
+    ofn.lpstrFile = szFile; // Буфер для имени файла
+    ofn.nMaxFile = sizeof(szFile) / sizeof(TCHAR);
+    ofn.lpstrFilter = _T("INF Files\0*.inf\0All Files\0*.*\0");
+    ofn.nFilterIndex = 1; // Индекс фильтра по умолчанию
+    ofn.lpstrDefExt = _T("inf"); // Расширение по умолчанию
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+    // Открыть диалог сохранения
+    if (GetSaveFileName(&ofn))
+    {
+        // Создаем файл и записываем в него данные
+        HANDLE hFile = CreateFile(
+            ofn.lpstrFile,                // Путь к файлу
+            GENERIC_WRITE,                // Режим записи
+            0,                            // Общий доступ
+            NULL,                         // Атрибуты безопасности
+            CREATE_ALWAYS,                // Перезаписывать, если файл существует
+            FILE_ATTRIBUTE_NORMAL,        // Атрибуты файла
+            NULL                          // Шаблон файла
+        );
+
+        if (hFile != INVALID_HANDLE_VALUE)
+        {
+            // Записываем данные в файл
+            const char* data = "This is a test file.\n";
+            DWORD bytesWritten;
+            WriteFile(hFile, data, strlen(data), &bytesWritten, NULL);
+
+            // Закрываем файл
+            CloseHandle(hFile);
+
+            MessageBox(hWnd, _T("File saved successfully!"), _T("Success"), MB_OK);
+        }
+        else
+        {
+            MessageBox(hWnd, _T("Failed to create the file."), _T("Error"), MB_OK);
+        }
+    }
+    else
+    {
+        // Если пользователь отменил выбор
+        MessageBox(hWnd, _T("Save cancelled."), _T("Info"), MB_OK);
+    }
+}
+
+
 LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     static Image* background = nullptr;
-    HWND hMainWindow = (HWND)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 
     switch (message)
     {
-    case ID_SAVE_FILE:
-
-        break;
     case WM_CREATE:
     {
         background = new Image(L"C:\\Users\\ddazk\\Downloads\\backimage.png");
@@ -60,13 +110,22 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         EndPaint(hWnd, &ps);
         break;
     }
-
+    case WM_COMMAND:
+        switch (LOWORD(wParam))
+        {
+        case ID_SAVE_FILE:
+            ShowSaveFileDialog(hWnd);
+            break;
+        default:
+            return DefWindowProc(hWnd, message, wParam, lParam);
+        }
+        break;
     case WM_CLOSE:
     case WM_DESTROY:
     {
-        if (backgroundImage) {
-            delete backgroundImage;
-            backgroundImage = nullptr;
+        if (background) {
+            delete background;
+            background = nullptr;
         }
         DestroyWindow(hWnd);
         break;
@@ -77,6 +136,7 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
 
     return 0;
 }
+
 
 void CreateFileProcessingForm(HWND hWnd) {
     static bool classRegistered = false;

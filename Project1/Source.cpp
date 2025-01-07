@@ -6,7 +6,9 @@
 #include <windows.h>
 #include <gdiplus.h>
 #include <tchar.h>
+#include <fstream>
 #include <string>
+#include <vector>
 
 using namespace Gdiplus;
 using namespace std;
@@ -34,15 +36,43 @@ void CreateAppMenu(HWND hWnd)
     SetMenu(hWnd, hMenu);
 }
 
-void ShowSaveFileDialog(HWND hWnd, const std::wstring& dataToWrite)
+void ReadFileContent(const wstring& filePath) {
+    ifstream file(filePath, ios::binary);
+    if (!file.is_open()) {
+        MessageBox(nullptr, L"Cannot open file", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    file.seekg(0, ios::end);
+    streamsize fileSize = file.tellg();
+    file.seekg(0, ios::beg);
+
+    if (fileSize <= 0) {
+        MessageBox(nullptr, L"File is empty", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    vector<char> buffer(static_cast<size_t>(fileSize));
+    file.read(buffer.data(), fileSize);
+    if (!file) {
+        MessageBox(nullptr, L"Failed to read file", L"Error", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    wstring content(reinterpret_cast<wchar_t*>(buffer.data()), buffer.size() / sizeof(wchar_t));
+
+    fileContent = content.c_str();
+}
+
+void ShowSaveFileDialog(HWND hWnd, const wstring& dataToWrite)
 {
-    OPENFILENAME ofn;       
-    TCHAR szFile[MAX_PATH] = _T("simple.inf"); 
+    OPENFILENAME ofn;
+    TCHAR szFile[MAX_PATH] = _T("simple.inf");
 
     ZeroMemory(&ofn, sizeof(ofn));
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = hWnd;
-    ofn.lpstrFile = szFile; 
+    ofn.lpstrFile = szFile;
     ofn.nMaxFile = sizeof(szFile) / sizeof(TCHAR);
     ofn.lpstrFilter = _T("INF Files\0*.inf\0All Files\0*.*\0");
     ofn.nFilterIndex = 1;
@@ -52,18 +82,24 @@ void ShowSaveFileDialog(HWND hWnd, const std::wstring& dataToWrite)
     if (GetSaveFileName(&ofn))
     {
         HANDLE hFile = CreateFile(
-            ofn.lpstrFile,                
-            GENERIC_WRITE,                
-            0,                            
-            NULL,                         
-            CREATE_ALWAYS,                
-            FILE_ATTRIBUTE_NORMAL,        
-            NULL                          
+            ofn.lpstrFile,
+            GENERIC_WRITE,
+            0,
+            NULL,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL
         );
 
         if (hFile != INVALID_HANDLE_VALUE)
         {
             DWORD bytesWritten;
+
+            // Добавляем BOM для UTF-16
+            const wchar_t bom = 0xFEFF;
+            WriteFile(hFile, &bom, sizeof(bom), &bytesWritten, NULL);
+
+            // Записываем основной текст
             WriteFile(hFile, dataToWrite.c_str(), dataToWrite.size() * sizeof(wchar_t), &bytesWritten, NULL);
 
             CloseHandle(hFile);
@@ -92,8 +128,6 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     case WM_CREATE:
     {
         background = new Image(L"C:\\Users\\ddazk\\Downloads\\backimage.png");
-
-        MessageBox(hWnd, fileContent.c_str(), _T("Error"), MB_OK);
 
         hEdit = CreateWindowEx(
             WS_EX_CLIENTEDGE,
@@ -124,9 +158,9 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
                 GetWindowText(hEdit, buffer, textLength + 1);
 
 #ifdef UNICODE
-                std::wstring str(buffer);
+                wstring str(buffer);
 #else
-                std::string str(buffer);
+                string str(buffer);
 #endif
                 delete[] buffer;
 
@@ -378,51 +412,41 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             ofn.hwndOwner = hWnd;
             ofn.lpstrFile = szFile;
             ofn.nMaxFile = sizeof(szFile) / sizeof(TCHAR);
-            ofn.lpstrFilter = _T("INF Files\0*.inf\0All Files\0*.*\0");
+            ofn.lpstrFilter = _T("All Files\0*.*\0");
             ofn.nFilterIndex = 1;
             ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
 
             if (GetOpenFileName(&ofn))
             {
-                MessageBox(hWnd, ofn.lpstrFile, _T("Selected File"), MB_OK);
+                ReadFileContent(szFile);
                 CreateFileProcessingForm(hWnd);
             }
             else
             {
-                MessageBox(hWnd, _T("No file selected."), _T("Open File"), MB_OK);
+                MessageBox(hWnd, _T("File open cancelled."), _T("Info"), MB_OK);
             }
-            
             break;
         }
         case ID_ABOUT:
-            MessageBox(hWnd, _T("Author: Datsko Dmytro\nEmail: dmytro.datsko@nure.ua"), _T("Menu"), MB_OK);
+        {
+            MessageBox(hWnd, _T("Coursework Application\nDeveloped by Dmitry"), _T("About"), MB_OK | MB_ICONINFORMATION);
             break;
+        }
+        default:
+            return DefWindowProc(hWnd, message, wParam, lParam);
         }
         break;
     case WM_DROPFILES:
     {
+        TCHAR fileName[MAX_PATH];
         HDROP hDrop = (HDROP)wParam;
 
-        UINT fileCount = DragQueryFile(hDrop, 0xFFFFFFFF, NULL, 0);
-
-        for (UINT i = 0; i < fileCount; i++)
+        if (DragQueryFile(hDrop, 0, fileName, MAX_PATH))
         {
-            TCHAR filePath[MAX_PATH];
-
-            DragQueryFile(hDrop, i, filePath, MAX_PATH);
-
-            const TCHAR* ext = _tcsrchr(filePath, _T('.'));
-            if (ext && _tcsicmp(ext, _T(".inf")) == 0)
-            {
-                MessageBox(hWnd, filePath, _T("Valid INF File"), MB_OK);
-                CreateFileProcessingForm(hWnd);
-            }
-            else
-            {
-                MessageBox(hWnd, _T("Invalid file type. Only .inf files are allowed."), _T("Error"), MB_OK);
-            }
+            ReadFileContent(fileName);
+            CreateFileProcessingForm(hWnd);
         }
-        
+
         DragFinish(hDrop);
         break;
     }

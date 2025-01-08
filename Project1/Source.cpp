@@ -2,6 +2,10 @@
 #define ID_OPEN_FILE 2
 #define ID_ABOUT 3
 #define ID_SAVE_FILE 4
+#define ID_FONT_ARIAL 5
+#define ID_FONT_TIMES 6
+#define ID_FONT_VERDANA 7
+#define ID_FONT_CALIBRI 8
 
 #include <windows.h>
 #include <gdiplus.h>
@@ -95,11 +99,8 @@ void ShowSaveFileDialog(HWND hWnd, const wstring& dataToWrite)
         {
             DWORD bytesWritten;
 
-            // Добавляем BOM для UTF-16
             const wchar_t bom = 0xFEFF;
             WriteFile(hFile, &bom, sizeof(bom), &bytesWritten, NULL);
-
-            // Записываем основной текст
             WriteFile(hFile, dataToWrite.c_str(), dataToWrite.size() * sizeof(wchar_t), &bytesWritten, NULL);
 
             CloseHandle(hFile);
@@ -118,13 +119,87 @@ void ShowSaveFileDialog(HWND hWnd, const wstring& dataToWrite)
     }
 }
 
+LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    static int fontSize = 12;
+    static HFONT hFont = nullptr;
+
+    switch (message)
+    {
+    case WM_KEYDOWN:
+        if (GetKeyState(VK_CONTROL) & 0x8000)
+        {
+            if (wParam == VK_OEM_PLUS || wParam == VK_ADD)
+            {
+                fontSize++;
+            }
+            else if (wParam == VK_OEM_MINUS || wParam == VK_SUBTRACT)
+            {
+                fontSize = max(1, fontSize - 1); 
+            }
+
+            if (hFont)
+            {
+                DeleteObject(hFont);
+            }
+            hFont = CreateFont(
+                fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, _T("Arial"));
+
+            SendMessage(hWnd, WM_SETFONT, (WPARAM)hFont, TRUE);
+            InvalidateRect(hWnd, NULL, TRUE);
+        }
+        break;
+    }
+
+    return CallWindowProc((WNDPROC)GetWindowLongPtr(hWnd, GWLP_USERDATA), hWnd, message, wParam, lParam);
+}
+
 LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     static HWND hEdit;
+    static HFONT hFont = nullptr;
     static Image* background = nullptr;
 
     switch (message)
     {
+    case WM_COMMAND: {
+        switch (LOWORD(wParam)) {
+        case ID_FONT_ARIAL:
+            if (hFont) DeleteObject(hFont);
+            hFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, _T("Arial"));
+            SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+            break;
+
+        case ID_FONT_TIMES:
+            if (hFont) DeleteObject(hFont);
+            hFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH | FF_ROMAN, _T("Times New Roman"));
+            SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+            break;
+
+        case ID_FONT_VERDANA:
+            if (hFont) DeleteObject(hFont);
+            hFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, _T("Verdana"));
+            SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+            break;
+
+        case ID_FONT_CALIBRI:
+            if (hFont) DeleteObject(hFont);
+            hFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, _T("Calibri"));
+            SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+            break;
+        }
+        break;
+    }
     case WM_CREATE:
     {
         background = new Image(L"C:\\Users\\ddazk\\Downloads\\backimage.png");
@@ -134,7 +209,7 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             _T("EDIT"),
             fileContent.c_str(),
             WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
-            10, 10, 460, 400, 
+            10, 10, 460, 400,
             hWnd,
             (HMENU)101,
             hInst,
@@ -144,46 +219,19 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
             MessageBox(hWnd, _T("Failed to create edit box."), _T("Error"), MB_OK);
         }
+        else
+        {
+            SetWindowLongPtr(hEdit, GWLP_USERDATA, GetWindowLongPtr(hEdit, GWLP_WNDPROC));
+            SetWindowLongPtr(hEdit, GWLP_WNDPROC, (LONG_PTR)EditSubclassProc);
+
+            hFont = CreateFont(
+                16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, _T("Arial"));
+            SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+        }
         break;
     }
-    case WM_COMMAND:
-        switch (LOWORD(wParam))
-        {
-        case ID_SAVE_FILE:
-        {
-            int textLength = GetWindowTextLength(hEdit);
-            if (textLength > 0)
-            {
-                TCHAR* buffer = new TCHAR[textLength + 1];
-                GetWindowText(hEdit, buffer, textLength + 1);
-
-#ifdef UNICODE
-                wstring str(buffer);
-#else
-                string str(buffer);
-#endif
-                delete[] buffer;
-
-                ShowSaveFileDialog(hWnd, str);
-                fileContent = str;
-
-                if (background)
-                {
-                    delete background;
-                    background = nullptr;
-                }
-                DestroyWindow(hWnd);
-            }
-            else
-            {
-                MessageBox(hWnd, _T("Text box is empty."), _T("Info"), MB_OK);
-            }
-            break;
-        }
-        default:
-            return DefWindowProc(hWnd, message, wParam, lParam);
-        }
-        break;
     case WM_PAINT:
     {
         PAINTSTRUCT ps;
@@ -201,6 +249,10 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
     case WM_CLOSE:
     case WM_DESTROY:
     {
+        if (hFont)
+        {
+            DeleteObject(hFont);
+        }
         if (background)
         {
             delete background;
@@ -268,8 +320,15 @@ void CreateFileProcessingForm(HWND hWnd) {
     );
 
     HMENU hMenu = CreateMenu();
+    HMENU hSubMenu = CreatePopupMenu();
 
     AppendMenu(hMenu, MF_STRING, ID_SAVE_FILE, _T("Save File"));
+    AppendMenu(hSubMenu, MF_STRING, ID_FONT_ARIAL, _T("Arial"));
+    AppendMenu(hSubMenu, MF_STRING, ID_FONT_TIMES, _T("Times New Roman"));
+    AppendMenu(hSubMenu, MF_STRING, ID_FONT_VERDANA, _T("Verdana"));
+    AppendMenu(hSubMenu, MF_STRING, ID_FONT_CALIBRI, _T("Calibri"));
+
+    AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hSubMenu, _T("Fonts"));
 
     SetMenu(hNewForm, hMenu);
 

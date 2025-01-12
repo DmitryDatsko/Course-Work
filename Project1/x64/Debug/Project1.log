@@ -1,3 +1,3 @@
 ﻿  Source.cpp
-C:\Users\ddazk\source\repos\Project1\Project1\Source.cpp(104,70): warning C4267: 'argument': conversion from 'size_t' to 'DWORD', possible loss of data
+C:\Users\ddazk\source\repos\Project1\Project1\Source.cpp(110,70): warning C4267: 'argument': conversion from 'size_t' to 'DWORD', possible loss of data
   Project1.vcxproj -> C:\Users\ddazk\source\repos\Project1\x64\Debug\Project1.exe

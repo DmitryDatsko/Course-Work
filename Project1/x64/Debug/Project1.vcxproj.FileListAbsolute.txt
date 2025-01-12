@@ -1,0 +1,2 @@
+C:\Users\ddazk\source\repos\Project1\x64\Debug\backimage.png
+C:\Users\ddazk\source\repos\Project1\x64\Debug\mainIcon.ico

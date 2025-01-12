@@ -13,6 +13,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <iostream>
 
 using namespace Gdiplus;
 using namespace std;
@@ -22,10 +23,15 @@ using namespace std;
 wstring fileContent;
 HINSTANCE hInst;
 ULONG_PTR gdiplusToken;
+wchar_t globalImagePath[MAX_PATH] = L"";
+wchar_t globalIconPath[MAX_PATH] = L"";
 Image* backgroundImage = nullptr;
 
 static TCHAR szWindowClass[] = _T("DesktopApp");
 static TCHAR szTitle[] = _T("Coursework");
+static int currentFontId = ID_FONT_ARIAL;
+static int fontSize = 16;
+static HWND hFontSizeInfo;
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -121,7 +127,6 @@ void ShowSaveFileDialog(HWND hWnd, const wstring& dataToWrite)
 
 LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    static int fontSize = 12;
     static HFONT hFont = nullptr;
 
     switch (message)
@@ -135,13 +140,18 @@ LRESULT CALLBACK EditSubclassProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM
             }
             else if (wParam == VK_OEM_MINUS || wParam == VK_SUBTRACT)
             {
-                fontSize = max(1, fontSize - 1); 
+                fontSize = max(1, fontSize - 1);
             }
 
             if (hFont)
             {
                 DeleteObject(hFont);
             }
+
+            TCHAR fontSizeText[50];
+            wsprintf(fontSizeText, _T("Font Size: %d"), fontSize);
+            SetWindowText(hFontSizeInfo, fontSizeText);
+
             hFont = CreateFont(
                 fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -168,42 +178,53 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         switch (LOWORD(wParam)) {
         case ID_FONT_ARIAL:
             if (hFont) DeleteObject(hFont);
-            hFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            hFont = CreateFont(fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                 DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, _T("Arial"));
             SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+            currentFontId = ID_FONT_ARIAL;
             break;
 
         case ID_FONT_TIMES:
             if (hFont) DeleteObject(hFont);
-            hFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            hFont = CreateFont(fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                 DEFAULT_QUALITY, DEFAULT_PITCH | FF_ROMAN, _T("Times New Roman"));
             SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+            currentFontId = ID_FONT_TIMES;
             break;
 
         case ID_FONT_VERDANA:
             if (hFont) DeleteObject(hFont);
-            hFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            hFont = CreateFont(fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                 DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, _T("Verdana"));
             SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+            currentFontId = ID_FONT_VERDANA;
             break;
 
         case ID_FONT_CALIBRI:
             if (hFont) DeleteObject(hFont);
-            hFont = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+            hFont = CreateFont(fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                 DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, _T("Calibri"));
             SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+            currentFontId = ID_FONT_CALIBRI;
             break;
         }
+
+        HMENU hMenu = GetMenu(hWnd);
+        CheckMenuItem(hMenu, ID_FONT_ARIAL, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_FONT_TIMES, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_FONT_VERDANA, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_FONT_CALIBRI, MF_UNCHECKED);
+
+        CheckMenuItem(hMenu, currentFontId, MF_CHECKED);
+
         break;
     }
     case WM_CREATE:
     {
-        background = new Image(L"C:\\Users\\ddazk\\Downloads\\backimage.png");
-
         hEdit = CreateWindowEx(
             WS_EX_CLIENTEDGE,
             _T("EDIT"),
@@ -219,17 +240,19 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         {
             MessageBox(hWnd, _T("Failed to create edit box."), _T("Error"), MB_OK);
         }
-        else
-        {
+        else {
             SetWindowLongPtr(hEdit, GWLP_USERDATA, GetWindowLongPtr(hEdit, GWLP_WNDPROC));
             SetWindowLongPtr(hEdit, GWLP_WNDPROC, (LONG_PTR)EditSubclassProc);
 
             hFont = CreateFont(
-                16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                 DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, _T("Arial"));
             SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+            backgroundImage = new Image(globalImagePath);
         }
+
         break;
     }
     case WM_PAINT:
@@ -238,10 +261,7 @@ LRESULT CALLBACK FileProcessing(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
         HDC hdc = BeginPaint(hWnd, &ps);
         Graphics graphics(hdc);
 
-        if (background)
-        {
-            graphics.DrawImage(background, 0, 0, 500, 500);
-        }
+        graphics.DrawImage(backgroundImage, 0, 0, 500, 500);
 
         EndPaint(hWnd, &ps);
         break;
@@ -313,7 +333,7 @@ void CreateFileProcessingForm(HWND hWnd) {
 
     HICON hIcon = (HICON)LoadImage(
         NULL,
-        _T("C:\\Users\\ddazk\\Downloads\\mainIcon.ico"),
+        globalIconPath,
         IMAGE_ICON,
         0, 0,
         LR_LOADFROMFILE
@@ -329,6 +349,7 @@ void CreateFileProcessingForm(HWND hWnd) {
     AppendMenu(hSubMenu, MF_STRING, ID_FONT_CALIBRI, _T("Calibri"));
 
     AppendMenu(hMenu, MF_POPUP, (UINT_PTR)hSubMenu, _T("Fonts"));
+    CheckMenuItem(hSubMenu, ID_FONT_ARIAL, MF_CHECKED);
 
     SetMenu(hNewForm, hMenu);
 
@@ -340,6 +361,25 @@ void CreateFileProcessingForm(HWND hWnd) {
     else
     {
         MessageBox(hWnd, _T("Failed to load icon."), _T("Error"), MB_OK);
+    }
+
+    RECT clientRect;
+    GetClientRect(hNewForm, &clientRect);
+
+    hFontSizeInfo = CreateWindowEx(
+        0,
+        _T("STATIC"),
+        _T("Font Size: 16"),
+        WS_CHILD | WS_VISIBLE,
+        10, clientRect.bottom - 30,
+        90, 20,
+        hNewForm,
+        NULL,
+        hInst,
+        NULL);
+
+    if (!hFontSizeInfo) {
+        MessageBox(hWnd, _T("Failed to create label."), _T("Error"), MB_OK);
     }
 
     ShowWindow(hNewForm, SW_SHOW);
@@ -355,7 +395,13 @@ int WINAPI WinMain(
     GdiplusStartupInput gdiplusStartupInput;
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
 
-    backgroundImage = new Image(L"C:\\Users\\ddazk\\Downloads\\backimage.png");
+    GetCurrentDirectory(MAX_PATH, globalImagePath);
+    GetCurrentDirectory(MAX_PATH, globalIconPath);
+
+    wcscat_s(globalImagePath, MAX_PATH, L"\\backimage.png");
+    wcscat_s(globalIconPath, MAX_PATH, L"\\mainIcon.ico");
+
+    backgroundImage = new Image(globalImagePath);
 
     WNDCLASSEX wcex;
     wcex.cbSize = sizeof(WNDCLASSEX);
@@ -392,7 +438,7 @@ int WINAPI WinMain(
 
     HICON hIcon = (HICON)LoadImage(
         NULL,
-        _T("C:\\Users\\ddazk\\Downloads\\mainIcon.ico"),
+        globalIconPath,
         IMAGE_ICON,
         0, 0,
         LR_LOADFROMFILE
@@ -488,7 +534,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         case ID_ABOUT:
         {
-            MessageBox(hWnd, _T("Coursework Application\nDeveloped by Dmitry"), _T("About"), MB_OK | MB_ICONINFORMATION);
+            MessageBox(hWnd, _T("Coursework Application\nDeveloped by Dmitry\nEmail: dmytro.datsko@nure.ua"), _T("About"), MB_OK | MB_ICONINFORMATION);
             break;
         }
         default:
